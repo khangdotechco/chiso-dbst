@@ -1,0 +1,20 @@
+{
+  "name": "Chỉ số đồng hồ — Đông Bắc Sông Tiền",
+  "short_name": "Chỉ số ĐH",
+  "description": "Ghi chỉ số đồng hồ nước thô, nước sạch, điện lúc 8h và 16h, gửi về nhóm dữ liệu nhà máy.",
+  "start_url": "./index.html",
+  "scope": "./",
+  "display": "standalone",
+  "orientation": "portrait",
+  "background_color": "#1F3864",
+  "theme_color": "#1F3864",
+  "lang": "vi",
+  "icons": [
+    {
+      "src": "icon.svg",
+      "sizes": "any",
+      "type": "image/svg+xml",
+      "purpose": "any"
+    }
+  ]
+}

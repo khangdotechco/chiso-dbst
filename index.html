@@ -1,0 +1,559 @@
+<!DOCTYPE html>
+<html lang="vi">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0, viewport-fit=cover">
+<title>Chỉ số đồng hồ — ĐBST</title>
+<meta name="theme-color" content="#1F3864">
+<link rel="manifest" href="manifest.json">
+<link rel="icon" href="icon.svg" type="image/svg+xml">
+<style>
+  :root {
+    --navy: #1F3864; --navy2: #2A4A85; --bg: #eef2f8;
+    --ok: #2E8B57; --err: #C0392B; --warn: #8a6d00;
+    --tho: #2A8C82; --sach: #2F5597; --dien: #B5651D;
+  }
+  * { box-sizing: border-box; -webkit-tap-highlight-color: transparent; }
+  body { margin: 0; font-family: -apple-system, "Segoe UI", Roboto, Arial, sans-serif;
+         background: var(--bg); color: #222; min-height: 100vh; }
+  header { background: var(--navy); color: #fff; padding: 14px 16px; font-size: 17px; font-weight: 700; }
+  header small { display:block; font-weight:400; font-size:12px; opacity:.85; margin-top:2px; }
+  main { padding: 14px; max-width: 520px; margin: 0 auto; }
+  .card { background:#fff; border-radius:12px; padding:16px; box-shadow:0 1px 4px rgba(0,0,0,.08); margin-bottom:12px; }
+  label { display:block; font-size:13px; font-weight:600; color:#374151; margin:12px 0 4px; }
+  label .req { color: var(--err); }
+  select, input[type=date], input[type=text] {
+    width:100%; font-size:16px; padding:10px 12px; border:1px solid #cbd5e1; border-radius:8px; background:#fff; color:#111; }
+  select:focus, input:focus { outline:2px solid var(--navy2); border-color:var(--navy2); }
+  .row2 { display:grid; grid-template-columns:1fr 1fr; gap:10px; }
+  .hint { font-size:12px; color:#6b7280; margin-top:3px; }
+  .khung { display:flex; gap:8px; }
+  .khung label { flex:1; margin:0; border:1px solid #cbd5e1; border-radius:8px; padding:10px; text-align:center;
+                 font-size:15px; cursor:pointer; background:#fff; }
+  .khung input { display:none; }
+  .khung label.on { background:var(--navy); color:#fff; border-color:var(--navy); }
+  .group { margin-top:16px; border-left:4px solid #ccc; padding-left:10px; }
+  .group.tho { border-color: var(--tho); } .group.sach { border-color: var(--sach); }
+  .group.dien { border-color: var(--dien); } .group.ozone { border-color: #7a7a7a; }
+  .gtitle { font-size:14px; font-weight:700; margin-bottom:2px; }
+  .group.tho .gtitle { color: var(--tho); } .group.sach .gtitle { color: var(--sach); }
+  .group.dien .gtitle { color: var(--dien); } .group.ozone .gtitle { color: #555; }
+  .meter { padding:8px 0 6px; border-bottom:1px dashed #e2e8f0; }
+  .meter:last-child { border-bottom:none; }
+  .meter label { margin:0 0 4px; font-weight:600; }
+  .meter .hs { font-weight:400; color:#6b7280; font-size:12px; }
+  .prev { font-size:12px; color:#6b7280; margin-top:4px; }
+  .delta { font-size:13px; font-weight:700; margin-top:2px; }
+  .delta.bad { color: var(--err); } .delta.ok { color:#111; }
+  .resetBox { display:none; margin-top:6px; background:#f8fafc; border:1px solid #e2e8f0; border-radius:8px; padding:8px; }
+  .resetBox input { margin-top:4px; }
+  .chk { display:flex; align-items:center; gap:6px; font-size:12px; color:#374151; margin-top:6px; font-weight:400; }
+  .chk input { width:auto; margin:0; }
+  #summary { margin-top:16px; background:#f3f6fb; border-radius:10px; padding:12px; font-size:14px; line-height:1.6; }
+  #summary b { font-size:15px; }
+  button { width:100%; margin-top:16px; padding:14px; font-size:17px; font-weight:700; color:#fff;
+           background:var(--navy); border:none; border-radius:10px; cursor:pointer; }
+  button:disabled { background:#9aa5b1; cursor:not-allowed; }
+  button.secondary { background:#eef2f8; color:var(--navy); border:1px solid #cbd5e1; }
+  #status { margin-top:12px; padding:12px; border-radius:8px; font-size:14px; white-space:pre-wrap; display:none; }
+  #status.ok { display:block; background:#e6f4ec; color:var(--ok); }
+  #status.err { display:block; background:#fdecea; color:var(--err); }
+  #status.info { display:block; background:#eef2f8; color:#374151; }
+  #status.warn { display:block; background:#fff8e1; color:var(--warn); }
+  table.history { width:100%; border-collapse:collapse; font-size:12.5px; }
+  table.history th, table.history td { border:1px solid #d7dee8; padding:5px 6px; text-align:right; white-space:nowrap; }
+  table.history th { background:#eef2f8; color:#374151; text-align:center; }
+  table.history td.l { text-align:left; }
+</style>
+</head>
+<body>
+<header>
+  CHỈ SỐ ĐỒNG HỒ — ĐÔNG BẮC SÔNG TIỀN
+  <small>Nước thô · nước sạch · điện — ghi lúc 8h và 16h (16h = giờ chốt)</small>
+</header>
+<main>
+  <!-- ============ CẤU HÌNH (anh Khang điền sau khi deploy Apps Script) ============ -->
+  <script>
+    // Trang KHONG chua token bot. Chi goi Apps Script (token nam trong Script Properties).
+    const APPS_SCRIPT_URL = 'https://script.google.com/macros/s/AKfycbxqEYOWnoKfFp-q67Lo2cSwZ3FAEZkg75y0u8vnu7xI1u5AHpANLQLERLQf2l7MEtmG/exec';   // dan URL .../exec sau khi deploy apps_script.gs
+    const SHARED_KEY = 'cwbEVLiq1632RStGKAjnkOblDQ-b71AzuiWFw05SrHY';        // = Script Property CS_SHARED_KEY
+  </script>
+  <!-- ========================================================================== -->
+
+  <div class="card">
+    <label for="plant">Nhà máy <span class="req">*</span></label>
+    <select id="plant"><option value="">— Chọn nhà máy —</option></select>
+
+    <div class="row2">
+      <div>
+        <label for="d">Ngày <span class="req">*</span></label>
+        <input type="date" id="d">
+      </div>
+      <div>
+        <label>Khung giờ <span class="req">*</span></label>
+        <div class="khung">
+          <label id="k8l"><input type="radio" name="khung" value="8h" id="k8">8h</label>
+          <label id="k16l"><input type="radio" name="khung" value="16h" id="k16">16h</label>
+        </div>
+      </div>
+    </div>
+    <div class="hint" id="khungHint"></div>
+
+    <div id="meters"></div>
+    <div id="summary" style="display:none"></div>
+
+    <label for="note">Ghi chú</label>
+    <input type="text" id="note" placeholder="vd: đồng hồ D200 hỏng, ghi bù…">
+
+    <label for="bySelect">Người ghi <span class="req">*</span></label>
+    <select id="bySelect"><option value="">— Chọn tên —</option></select>
+    <input type="text" id="byOther" placeholder="Nhập tên người ghi" autocomplete="name"
+           style="display:none; margin-top:8px;">
+
+    <button id="send">📤 GỬI CHỈ SỐ</button>
+    <div id="status"></div>
+  </div>
+
+  <div class="card">
+    <button id="historyBtn" class="secondary">🕘 Xem 7 ngày gần đây</button>
+    <div id="historyBox" style="display:none; margin-top:8px; overflow-x:auto;"></div>
+  </div>
+</main>
+
+<script>
+  // =========================================================================
+  // BANG DONG HO — PHAI KHOP chisoDH/chi_so_cauhinh.json (caitien.md §10b).
+  // nhom: tho | sach | dien | ozone (ozone TRU khoi nuoc tho).  hs = he so nhan
+  // (lay tu CONG THUC file Excel tram).  dau = +1 cong / -1 tru (dien phu SXD).
+  // =========================================================================
+  const METERS = {
+    DB: [
+      { id:'c1',  nhom:'tho',  ten:'ĐH cấp 1 (nước thô)', hs:1 },
+      { id:'c2',  nhom:'sach', ten:'ĐH cấp 2 (nước sạch)', hs:1 },
+      { id:'dt',  nhom:'dien', ten:'Công tơ điện tổng', hs:100 },
+      { id:'dnc', nhom:'dien', ten:'Công tơ điện ngoài cầu lấy nước', hs:100 },
+    ],
+    DW: [
+      { id:'d300', nhom:'tho',  ten:'ĐH nước thô D300', hs:1 },
+      { id:'s200', nhom:'sach', ten:'ĐH nước sạch D200', hs:1 },
+      { id:'s300', nhom:'sach', ten:'ĐH nước sạch D300', hs:1 },
+      { id:'dt',   nhom:'dien', ten:'Công tơ điện tổng', hs:100 },
+    ],
+    HCL: [
+      { id:'d300', nhom:'tho',  ten:'ĐH nước thô D300', hs:1 },
+      { id:'d200', nhom:'tho',  ten:'ĐH nước thô D200', hs:1 },
+      { id:'d150', nhom:'tho',  ten:'ĐH nước thô D150', hs:1 },
+      { id:'c2',   nhom:'sach', ten:'ĐH cấp 2 (nước sạch)', hs:1 },
+      { id:'dt',   nhom:'dien', ten:'Công tơ điện tổng', hs:100 },
+    ],
+    MA:  [ { id:'c1', nhom:'tho', ten:'ĐH cấp 1 (nước thô)', hs:1 }, { id:'c2', nhom:'sach', ten:'ĐH cấp 2 (nước sạch)', hs:1 },
+           { id:'dt', nhom:'dien', ten:'Công tơ điện tổng', hs:100 } ],
+    MH:  [ { id:'c1', nhom:'tho', ten:'ĐH cấp 1 (nước thô)', hs:1 }, { id:'c2', nhom:'sach', ten:'ĐH cấp 2 (nước sạch)', hs:1 },
+           { id:'dt', nhom:'dien', ten:'Công tơ điện tổng', hs:100 } ],
+    TL:  [ { id:'c1', nhom:'tho', ten:'ĐH cấp 1 (nước thô)', hs:1 }, { id:'c2', nhom:'sach', ten:'ĐH cấp 2 (nước sạch)', hs:1 },
+           { id:'dt', nhom:'dien', ten:'Công tơ điện tổng', hs:100 } ],
+    TN:  [ { id:'c1', nhom:'tho', ten:'ĐH cấp 1 (nước thô)', hs:1 }, { id:'c2', nhom:'sach', ten:'ĐH cấp 2 (nước sạch)', hs:1 },
+           { id:'dt', nhom:'dien', ten:'Công tơ điện tổng', hs:10 } ],
+    TQT: [ { id:'c1', nhom:'tho', ten:'ĐH cấp 1 (nước thô)', hs:1 }, { id:'c2', nhom:'sach', ten:'ĐH cấp 2 (nước sạch)', hs:1 },
+           { id:'dt', nhom:'dien', ten:'Công tơ điện tổng', hs:100 } ],
+    TXmat: [
+      { id:'c1', nhom:'tho',   ten:'ĐH cấp 1 (nước thô)', hs:1 },
+      { id:'c2', nhom:'sach',  ten:'ĐH cấp 2 (nước sạch)', hs:1 },
+      { id:'oz', nhom:'ozone', ten:'ĐH D60 Ozone', hs:1 },
+      { id:'dt', nhom:'dien',  ten:'Công tơ điện tổng', hs:1 },
+    ],
+    TXgieng: [
+      { id:'rm', nhom:'sach', ten:'ĐH ra mạng', hs:1 },
+      { id:'dt', nhom:'dien', ten:'Công tơ điện', hs:1 },
+    ],
+    SXD: [
+      { id:'g',   nhom:'sach', ten:'ĐHLL tổng (giếng)', hs:1 },
+      { id:'dt',  nhom:'dien', ten:'Công tơ điện tổng', hs:100 },
+      { id:'vp1', nhom:'dien', ten:'Điện VP công ty 1 (trừ ra)', hs:20, dau:-1 },
+      { id:'nc',  nhom:'dien', ten:'Điện nước đóng chai (trừ ra)', hs:1, dau:-1 },
+      { id:'vp2', nhom:'dien', ten:'Điện VP công ty 2 (trừ ra)', hs:40, dau:-1 },
+    ],
+    PhuongTra: [
+      { id:'g',  nhom:'sach', ten:'ĐHLL giếng', hs:1 },
+      { id:'dt', nhom:'dien', ten:'Công tơ điện', hs:1 },
+    ],
+  };
+  const PLANT_NAMES = {
+    DB:'Đông Bình(DB)', DW:'Dowaco(DW)', HCL:'Mỹ Thọ(HCL)', MA:'Mỹ An(MA)', MH:'Mỹ Hiệp(MH)',
+    TL:'Tân Long(TL)', TN:'Tân Nghĩa(TN)', TQT:'Trần Quốc Toản(TQT)', TXmat:'Trường Xuân-mặt(TX)',
+    TXgieng:'Trường Xuân-giếng(TX)', SXD:'SXD(CD)', PhuongTra:'Phuong Tra(CD)'
+  };
+  const GIENG = { SXD:1, PhuongTra:1, TXgieng:1 };        // nuoc ngam: LL1 = LL2, khong tinh that thoat
+  const DB_DW = { DB:1, DW:1 };                            // thoat thoat rieng DB/DW vo nghia (nuoc chuyen)
+  const NHOM_TEN = { tho:'Nước thô (m³)', sach:'Nước sạch (m³)', ozone:'Nước ozone — trừ khỏi nước thô (m³)', dien:'Điện (kWh)' };
+  // Danh sach nhan vien (giong PWA do duc) — co muc "Khac…" nhap tay.
+  const STAFF_TL = ["Nguyễn Lê Sĩ", "Phạm Hồng Lĩnh", "Đặng Công Khanh"];
+  const STAFF_TX = ["Nguyễn Thanh Vũ", "Võ Hồng Sơn"];
+  const PLANT_STAFF = {
+    SXD: STAFF_TL, PhuongTra: STAFF_TL, TL: STAFF_TL,
+    DB: ["Cao Thanh Dững", "Nguyễn Thành Nghĩa", "Nguyễn Đăng Khoa", "Trương Minh Ngọc", "Trần Minh Lý"],
+    DW: ["Nguyễn Đăng Khoa", "Phan Huy Tùng", "Trương Minh Ngọc", "Trần Minh Lý"],
+    HCL: ["Lê Thành Công", "Nguyễn Anh Tuấn", "Ngô Trọng Ân"],
+    MA: ["Lưu Văn Gò", "Ngô Võ Phước Tài", "Trần Văn Công"],
+    MH: ["Phạm Minh Nhựt", "Trần Hửu Vinh"],
+    TN: ["Hồ Lê Hải Trường", "Lê Văn Mười"],
+    TQT: ["Nguyễn Hữu Nghĩa", "Võ Minh Nhựt", "Vũ Đức Cương"],
+    TXgieng: STAFF_TX, TXmat: STAFF_TX,
+  };
+  const PLANT_ORDER = ['DB','DW','HCL','MA','MH','TL','TN','TQT','TXmat','TXgieng','SXD','PhuongTra'];
+  // Canh bao "bat thuong": san luong ngay lech khoi trung vi 7 ngay qua nguong nay -> hoi lai.
+  const LECH_CAO = 1.8, LECH_THAP = 0.4;
+
+  const $ = id => document.getElementById(id);
+  const plantSel = $('plant'), dInp = $('d'), metersBox = $('meters'), summary = $('summary');
+  const bySelect = $('bySelect'), byOther = $('byOther'), noteInp = $('note');
+  const btn = $('send'), status = $('status'), historyBtn = $('historyBtn'), historyBox = $('historyBox');
+  let inputs = [];        // [{m, el, chk, oldEl, newEl, prevEl, deltaEl}]
+  let recent = [];        // cac lan ghi gan day cua nha may (tu Apps Script)
+  let recentPlant = '';
+
+  PLANT_ORDER.forEach(c => {
+    const o = document.createElement('option'); o.value = c; o.textContent = PLANT_NAMES[c];
+    plantSel.appendChild(o);
+  });
+
+  // ---------------- tien ich so ----------------
+  function parseCS(v) {
+    // Chi so dong ho: "9354897", "9.354.897" (cham ngan cach nghin), "123,5" / "123.5" (thap phan)
+    let s = String(v || '').replace(/\s+/g, '');
+    if (s === '') return null;
+    if (s.indexOf(',') >= 0) s = s.replace(/\./g, '').replace(',', '.');
+    else if (/^\d{1,3}(\.\d{3})+$/.test(s)) s = s.replace(/\./g, '');
+    const n = Number(s);
+    return Number.isFinite(n) ? n : NaN;
+  }
+  function fmt(n, dec) {
+    if (n === null || n === undefined || !Number.isFinite(n)) return '—';
+    const d = dec === undefined ? (Number.isInteger(n) ? 0 : 1) : dec;
+    const parts = Math.abs(n).toFixed(d).split('.');
+    parts[0] = parts[0].replace(/\B(?=(\d{3})+(?!\d))/g, '.');
+    return (n < 0 ? '−' : '') + parts.join(',');
+  }
+  function isoAdd(iso, days) {
+    const [y, m, d] = iso.split('-').map(Number);
+    const dt = new Date(Date.UTC(y, m - 1, d + days));
+    return dt.toISOString().slice(0, 10);
+  }
+  function vnDate(iso) { return iso ? iso.split('-').reverse().join('/') : ''; }
+  function todayIso() {
+    const n = new Date(), p = x => String(x).padStart(2, '0');
+    return `${n.getFullYear()}-${p(n.getMonth() + 1)}-${p(n.getDate())}`;
+  }
+  function khung() { return document.querySelector('input[name=khung]:checked')?.value || ''; }
+  function setKhung(k) {
+    $('k8').checked = k === '8h'; $('k16').checked = k === '16h';
+    $('k8l').className = k === '8h' ? 'on' : ''; $('k16l').className = k === '16h' ? 'on' : '';
+  }
+  function median(a) {
+    const b = a.filter(Number.isFinite).sort((x, y) => x - y);
+    if (!b.length) return null;
+    const h = Math.floor(b.length / 2);
+    return b.length % 2 ? b[h] : (b[h - 1] + b[h]) / 2;
+  }
+
+  // ---------------- form theo nha may ----------------
+  function populateBy(code) {
+    const names = PLANT_STAFF[code] || [];
+    const last = localStorage.getItem('cs_by_' + code) || '';
+    bySelect.innerHTML = '<option value="">— Chọn tên —</option>';
+    names.forEach(n => { const o = document.createElement('option'); o.value = n; o.textContent = n; bySelect.appendChild(o); });
+    const oth = document.createElement('option'); oth.value = '__other__'; oth.textContent = 'Khác… (nhập tên)';
+    bySelect.appendChild(oth);
+    bySelect.value = names.includes(last) ? last : '';
+    byOther.style.display = 'none';
+  }
+  function buildMeters(code) {
+    inputs = []; metersBox.innerHTML = ''; summary.style.display = 'none';
+    const ms = METERS[code] || [];
+    const nhoms = ['tho', 'ozone', 'sach', 'dien'];
+    for (const nh of nhoms) {
+      const list = ms.filter(m => m.nhom === nh);
+      if (!list.length) continue;
+      const g = document.createElement('div'); g.className = 'group ' + nh;
+      g.innerHTML = `<div class="gtitle">${NHOM_TEN[nh]}</div>`;
+      for (const m of list) {
+        const box = document.createElement('div'); box.className = 'meter';
+        const hsTxt = m.hs !== 1 ? ` <span class="hs">(× ${m.hs})</span>` : '';
+        box.innerHTML = `<label>${m.ten}${hsTxt} <span class="req">*</span></label>`;
+        const el = document.createElement('input');
+        el.type = 'text'; el.inputMode = 'decimal'; el.placeholder = 'Chỉ số trên mặt đồng hồ';
+        const prevEl = document.createElement('div'); prevEl.className = 'prev';
+        const deltaEl = document.createElement('div'); deltaEl.className = 'delta';
+        const chkL = document.createElement('label'); chkL.className = 'chk';
+        const chk = document.createElement('input'); chk.type = 'checkbox';
+        chkL.appendChild(chk); chkL.appendChild(document.createTextNode('Đã thay / reset đồng hồ từ lần ghi trước'));
+        const rb = document.createElement('div'); rb.className = 'resetBox';
+        rb.innerHTML = '<div class="hint">Nhập chỉ số CUỐI của đồng hồ cũ và chỉ số ĐẦU của đồng hồ mới (lúc lắp).</div>';
+        const oldEl = document.createElement('input'); oldEl.type = 'text'; oldEl.inputMode = 'decimal';
+        oldEl.placeholder = 'Chỉ số cuối đồng hồ cũ';
+        const newEl = document.createElement('input'); newEl.type = 'text'; newEl.inputMode = 'decimal';
+        newEl.placeholder = 'Chỉ số đầu đồng hồ mới';
+        rb.appendChild(oldEl); rb.appendChild(newEl);
+        chk.addEventListener('change', () => { rb.style.display = chk.checked ? 'block' : 'none'; recalc(); });
+        [el, oldEl, newEl].forEach(x => x.addEventListener('input', recalc));
+        box.appendChild(el); box.appendChild(prevEl); box.appendChild(deltaEl);
+        box.appendChild(chkL); box.appendChild(rb);
+        g.appendChild(box);
+        inputs.push({ m, el, chk, oldEl, newEl, prevEl, deltaEl });
+      }
+      metersBox.appendChild(g);
+    }
+  }
+
+  // ---------------- lan ghi truoc + trung vi ----------------
+  function baseRow() {
+    // Moc so sanh = lan ghi 16h GAN NHAT truoc ngay dang ghi (ngay D-1 la chuan).
+    const d = dInp.value;
+    const cand = recent.filter(r => r.khung === '16h' && r.ngay < d)
+                       .sort((a, b) => (a.ngay + a.row_id).localeCompare(b.ngay + b.row_id));
+    return cand.length ? cand[cand.length - 1] : null;
+  }
+  function meterDelta(cur, prev, reset) {
+    // San luong theo MAT DONG HO (chua nhan he so). reset = {cu, moi}
+    if (!Number.isFinite(cur) || !Number.isFinite(prev)) return null;
+    if (reset && Number.isFinite(reset.cu) && Number.isFinite(reset.moi)) return (reset.cu - prev) + (cur - reset.moi);
+    return cur - prev;
+  }
+  function totals(code, vals, prevVals, resets) {
+    // -> {tho, sach, dien, thieu:[ten]} (da nhan he so; ozone tru khoi tho)
+    const t = { tho: 0, sach: 0, dien: 0, thieu: [] };
+    for (const m of METERS[code] || []) {
+      const d = meterDelta(vals[m.id], prevVals ? prevVals[m.id] : null, resets ? resets[m.id] : null);
+      if (d === null) { t.thieu.push(m.ten); continue; }
+      const v = d * m.hs * (m.dau || 1);
+      if (m.nhom === 'ozone') t.tho -= v; else t[m.nhom] += v;
+    }
+    if (GIENG[code]) t.tho = t.sach;
+    return t;
+  }
+  function typical(code) {
+    // trung vi san luong NGAY (16h->16h ngay lien tiep) cua 7 ngay gan nhat truoc ngay dang ghi
+    const rows = recent.filter(r => r.khung === '16h' && r.ngay < dInp.value)
+                       .sort((a, b) => (a.ngay + a.row_id).localeCompare(b.ngay + b.row_id));
+    const byDay = {}; rows.forEach(r => { byDay[r.ngay] = r; });
+    const days = Object.keys(byDay).sort();
+    const out = { tho: [], sach: [], dien: [], meter: {} };
+    for (let i = 1; i < days.length; i++) {
+      if (isoAdd(days[i - 1], 1) !== days[i]) continue;
+      const a = byDay[days[i - 1]], b = byDay[days[i]];
+      const t = totals(code, b.values, a.values, b.resets);
+      if (!t.thieu.length) { out.tho.push(t.tho); out.sach.push(t.sach); out.dien.push(t.dien); }
+      for (const m of METERS[code] || []) {
+        const d = meterDelta(b.values[m.id], a.values[m.id], (b.resets || {})[m.id]);
+        if (d !== null) (out.meter[m.id] = out.meter[m.id] || []).push(d);
+      }
+    }
+    return {
+      tho: median(out.tho.slice(-7)), sach: median(out.sach.slice(-7)), dien: median(out.dien.slice(-7)),
+      meter: Object.fromEntries(Object.entries(out.meter).map(([k, v]) => [k, median(v.slice(-7))]))
+    };
+  }
+
+  // ---------------- tinh lai moi khi go so ----------------
+  function readForm() {
+    const vals = {}, resets = {}, errs = [];
+    for (const it of inputs) {
+      const v = parseCS(it.el.value);
+      vals[it.m.id] = v;
+      if (Number.isNaN(v)) errs.push(`${it.m.ten}: số không hợp lệ`);
+      if (it.chk.checked) {
+        const cu = parseCS(it.oldEl.value), moi = parseCS(it.newEl.value);
+        resets[it.m.id] = { cu, moi };
+        if (!Number.isFinite(cu) || !Number.isFinite(moi)) errs.push(`${it.m.ten}: thiếu chỉ số đồng hồ cũ/mới`);
+      }
+    }
+    return { vals, resets, errs };
+  }
+  function recalc() {
+    const code = plantSel.value;
+    if (!code) return;
+    const base = recentPlant === code ? baseRow() : null;
+    const typ = recentPlant === code ? typical(code) : null;
+    const { vals, resets } = readForm();
+    const warns = [];
+    for (const it of inputs) {
+      const pv = base ? base.values[it.m.id] : null;
+      it.prevEl.textContent = Number.isFinite(pv)
+        ? `Lần trước: ${fmt(pv)} (16h ${vnDate(base.ngay)})` : (recentPlant === code ? 'Chưa có lần ghi 16h trước đó' : '');
+      const d = meterDelta(vals[it.m.id], pv, resets[it.m.id]);
+      if (d === null) { it.deltaEl.textContent = ''; continue; }
+      const tm = typ && typ.meter[it.m.id];
+      let bad = d < 0, why = d < 0 ? ' ⚠ ÂM — đồng hồ lùi? kiểm tra lại hoặc tick "thay/reset"' : '';
+      if (!bad && tm && tm > 0 && (d > tm * LECH_CAO || d < tm * LECH_THAP)) {
+        bad = true; why = ` ⚠ khác thường (thường ~${fmt(tm)})`;
+      }
+      const donvi = it.m.nhom === 'dien' ? 'kWh' : 'm³';
+      it.deltaEl.className = 'delta ' + (bad ? 'bad' : 'ok');
+      it.deltaEl.textContent = `+${fmt(d)}` + (it.m.hs !== 1 ? ` × ${it.m.hs} = ${fmt(d * it.m.hs)} ${donvi}` : ` ${donvi}`) + why;
+      if (bad) warns.push(`${it.m.ten}: ${fmt(d)}${why}`);
+    }
+    if (!base) { summary.style.display = 'none'; return warns; }
+    const t = totals(code, vals, base.values, resets);
+    const gap = Math.round((Date.parse(dInp.value) - Date.parse(base.ngay)) / 86400000);
+    const khungTxt = khung() === '8h' ? `16h ${vnDate(base.ngay)} → 8h ${vnDate(dInp.value)} (chưa trọn ngày)`
+                                      : `16h ${vnDate(base.ngay)} → 16h ${vnDate(dInp.value)}` + (gap > 1 ? ` — GỘP ${gap} NGÀY` : '');
+    let html = `<b>Sản lượng tạm tính</b> <span class="hint">${khungTxt}</span><br>`;
+    if (t.thieu.length) html += `<span class="hint">Còn thiếu: ${t.thieu.join(', ')}</span><br>`;
+    else {
+      if (!GIENG[code]) html += `Nước thô: <b>${fmt(t.tho)}</b> m³<br>`;
+      html += `Nước sạch: <b>${fmt(t.sach)}</b> m³<br>`;
+      html += `Điện: <b>${fmt(t.dien)}</b> kWh` + (t.sach > 0 ? ` · ${fmt(t.dien / t.sach, 2)} kWh/m³` : '') + '<br>';
+      if (!GIENG[code] && !DB_DW[code] && t.tho > 0) html += `Thất thoát: <b>${fmt((t.tho - t.sach) / t.tho * 100, 1)}%</b><br>`;
+      if (DB_DW[code]) html += '<span class="hint">Đông Bình: thất thoát xem theo Đông Bình tổng (DB + DW).</span><br>';
+      if (khung() === '16h' && gap === 1 && typ) {
+        for (const [k, ten] of [['tho', 'Nước thô'], ['sach', 'Nước sạch'], ['dien', 'Điện']]) {
+          if (GIENG[code] && k === 'tho') continue;
+          const tv = typ[k];
+          if (tv && tv > 0 && (t[k] > tv * LECH_CAO || t[k] < tv * LECH_THAP))
+            warns.push(`${ten} ngày = ${fmt(t[k])} khác thường (7 ngày qua thường ~${fmt(tv)})`);
+        }
+      }
+    }
+    summary.innerHTML = html; summary.style.display = 'block';
+    summary._t = t; summary._base = base;
+    return warns;
+  }
+
+  // ---------------- tai lan ghi gan day ----------------
+  async function loadRecent(code) {
+    recent = []; recentPlant = '';
+    if (!code || !APPS_SCRIPT_URL || !SHARED_KEY) return;
+    try {
+      const url = APPS_SCRIPT_URL + '?action=recent&plant=' + encodeURIComponent(code) +
+                  '&days=12&key=' + encodeURIComponent(SHARED_KEY);
+      const resp = await fetch(url);
+      const data = await resp.json();
+      if (data.ok && plantSel.value === code) { recent = data.rows || []; recentPlant = code; }
+    } catch (e) { /* mat mang: van cho nhap, chi khong co so lan truoc */ }
+    recalc();
+  }
+
+  // ---------------- su kien ----------------
+  plantSel.addEventListener('change', () => {
+    const c = plantSel.value;
+    localStorage.setItem('cs_plant', c);
+    populateBy(c); buildMeters(c); historyBox.style.display = 'none';
+    loadRecent(c);
+  });
+  dInp.addEventListener('change', recalc);
+  document.querySelectorAll('input[name=khung]').forEach(r => r.addEventListener('change', () => { setKhung(khung()); recalc(); }));
+  bySelect.addEventListener('change', () => {
+    byOther.style.display = bySelect.value === '__other__' ? 'block' : 'none';
+    if (bySelect.value === '__other__') byOther.focus();
+  });
+
+  function show(msg, kind) { status.className = kind; status.textContent = msg; status.style.display = 'block'; }
+  function clearStatus() { status.className = ''; status.textContent = ''; status.style.display = 'none'; }
+
+  function buildMessage(code, k, vals, resets, by, note) {
+    // Tin chu gui nhom du lieu nha may (Apps Script them dong "gui luc HH:mm").
+    const lines = [`🔢 CHỈ SỐ ${PLANT_NAMES[code]} — ${k} ${vnDate(dInp.value)}`];
+    const base = summary._base && recentPlant === code ? summary._base : null;
+    for (const m of METERS[code]) {
+      let s = `  ${m.ten}: ${fmt(vals[m.id])}`;
+      const r = resets[m.id];
+      if (r) s += ` [thay ĐH: cũ ${fmt(r.cu)} → mới ${fmt(r.moi)}]`;
+      const d = base ? meterDelta(vals[m.id], base.values[m.id], r) : null;
+      if (d !== null) s += ` (+${fmt(d * m.hs)}${m.nhom === 'dien' ? ' kWh' : ' m³'})`;
+      lines.push(s);
+    }
+    const t = summary._t;
+    if (base && t && !t.thieu.length) {
+      const parts = [];
+      if (!GIENG[code]) parts.push(`thô ${fmt(t.tho)} m³`);
+      parts.push(`sạch ${fmt(t.sach)} m³`, `điện ${fmt(t.dien)} kWh`);
+      if (!GIENG[code] && !DB_DW[code] && t.tho > 0) parts.push(`thất thoát ${fmt((t.tho - t.sach) / t.tho * 100, 1)}%`);
+      lines.push(`  ➜ ${k === '8h' ? 'Từ 16h hôm trước đến 8h' : 'Ngày (16h→16h)'}: ` + parts.join(' · '));
+    }
+    if (note) lines.push(`  📝 ${note}`);
+    lines.push(`  — ${by}`);
+    return lines.join('\n');
+  }
+
+  btn.addEventListener('click', async () => {
+    clearStatus();
+    if (!APPS_SCRIPT_URL || !SHARED_KEY) { show('❌ Trang chưa cấu hình APPS_SCRIPT_URL / SHARED_KEY.', 'err'); return; }
+    const code = plantSel.value, k = khung();
+    if (!code) { show('❌ Vui lòng chọn nhà máy.', 'err'); return; }
+    if (!dInp.value || !k) { show('❌ Vui lòng chọn ngày và khung giờ.', 'err'); return; }
+    if (dInp.value > todayIso()) { show('❌ Ngày ghi không được sau hôm nay.', 'err'); return; }
+    const { vals, resets, errs } = readForm();
+    if (errs.length) { show('❌ ' + errs.join('\n'), 'err'); return; }
+    const blank = inputs.filter(it => vals[it.m.id] === null).map(it => it.m.ten);
+    const note = noteInp.value.trim();
+    if (blank.length) {
+      if (!note) { show('❌ Để trống: ' + blank.join(', ') + '\nNếu đồng hồ hỏng/không đọc được, ghi lý do vào ô Ghi chú.', 'err'); noteInp.focus(); return; }
+      if (!confirm('Để trống ' + blank.join(', ') + '?\nLý do: ' + note)) return;
+    }
+    const by = bySelect.value === '__other__' ? byOther.value.trim() : bySelect.value;
+    if (!by) { show('❌ Vui lòng chọn/nhập tên người ghi.', 'err'); return; }
+    const warns = recalc() || [];
+    if (warns.length && !confirm('⚠️ Kiểm tra lại:\n' + warns.join('\n') + '\n\nVẫn GỬI?')) return;
+    const dup = recent.find(r => r.ngay === dInp.value && r.khung === k);
+    if (dup && !confirm(`Đã có chỉ số ${k} ngày ${vnDate(dInp.value)} (${dup.by || ''}).\nGửi lại sẽ THAY bản cũ. Tiếp tục?`)) return;
+
+    const values = {}; inputs.forEach(it => { if (vals[it.m.id] !== null) values[it.m.id] = vals[it.m.id]; });
+    const payload = {
+      key: SHARED_KEY, plant: code, ngay: dInp.value, khung: k,
+      values, resets, by, note,
+      tin_nhan: buildMessage(code, k, vals, resets, by, note)
+    };
+    btn.disabled = true; show('⏳ Đang gửi…', 'info');
+    try {
+      const resp = await fetch(APPS_SCRIPT_URL, {
+        method: 'POST', headers: { 'Content-Type': 'text/plain;charset=utf-8' }, body: JSON.stringify(payload)
+      });
+      const text = await resp.text();
+      let data; try { data = JSON.parse(text); } catch (e) { data = { ok: false, error: text.slice(0, 200) }; }
+      if (data.ok) {
+        show(`✅ Đã gửi chỉ số ${k} ${vnDate(dInp.value)} (${data.gio_nhan || ''}).`, 'ok');
+        if (bySelect.value === '__other__') localStorage.setItem('cs_by_other_last', by);
+        else localStorage.setItem('cs_by_' + code, by);
+        inputs.forEach(it => { it.el.value = ''; it.oldEl.value = ''; it.newEl.value = ''; it.chk.checked = false;
+                               it.oldEl.parentNode.style.display = 'none'; });
+        noteInp.value = '';
+        loadRecent(code);
+      } else {
+        show('❌ Gửi lỗi: ' + (data.error || JSON.stringify(data)), 'err');
+      }
+    } catch (e) {
+      show('❌ Không gửi được (mạng/Apps Script): ' + e.message + '\nThử lại hoặc báo kỹ thuật viên.', 'err');
+    } finally { btn.disabled = false; }
+  });
+
+  historyBtn.addEventListener('click', async () => {
+    const code = plantSel.value;
+    if (!code) { show('❌ Vui lòng chọn nhà máy trước.', 'err'); return; }
+    if (recentPlant !== code) await loadRecent(code);
+    const rows = recent.slice().sort((a, b) => (b.ngay + b.khung.padStart(3, '0') + b.row_id)
+                                        .localeCompare(a.ngay + a.khung.padStart(3, '0') + a.row_id));
+    if (!rows.length) { historyBox.innerHTML = '<div class="hint">Chưa có lần ghi nào.</div>'; historyBox.style.display = 'block'; return; }
+    const ms = METERS[code];
+    let h = '<table class="history"><thead><tr><th>Ngày</th><th>Khung</th>' +
+            ms.map(m => `<th>${m.id}</th>`).join('') + '<th>Người ghi</th><th>Gửi lúc</th></tr></thead><tbody>';
+    const seen = {};
+    for (const r of rows) {
+      const key = r.ngay + r.khung; if (seen[key]) continue; seen[key] = 1;     // ban moi nhat
+      if (r.ngay < isoAdd(todayIso(), -7)) continue;
+      h += `<tr><td class="l">${vnDate(r.ngay).slice(0, 5)}</td><td>${r.khung}</td>` +
+           ms.map(m => `<td>${fmt(r.values[m.id])}</td>`).join('') +
+           `<td class="l">${r.by || ''}</td><td>${(r.gio_nhan || '').slice(11, 16)}</td></tr>`;
+    }
+    h += '</tbody></table><div class="hint">Cột = mã đồng hồ: ' + ms.map(m => `${m.id} = ${m.ten}`).join(' · ') + '</div>';
+    historyBox.innerHTML = h; historyBox.style.display = 'block';
+  });
+
+  // ---------------- khoi dong ----------------
+  dInp.value = todayIso();
+  setKhung(new Date().getHours() < 12 ? '8h' : '16h');
+  $('khungHint').textContent = 'Khung 16h là số CHỐT tính sản lượng ngày (16h hôm trước → 16h hôm nay).';
+  const lastPlant = localStorage.getItem('cs_plant') || '';
+  if (METERS[lastPlant]) { plantSel.value = lastPlant; populateBy(lastPlant); buildMeters(lastPlant); loadRecent(lastPlant); }
+</script>
+</body>
+</html>
