@@ -69,7 +69,7 @@
 <body>
 <header>
   CHỈ SỐ ĐỒNG HỒ — ĐÔNG BẮC SÔNG TIỀN
-  <small>Nước thô · nước sạch · điện — ghi lúc 8h và 16h (16h = giờ chốt)</small>
+  <small>Nước thô · nước sạch · điện — ghi lúc 8h và 16h (chốt 16h; CD chốt 8h)</small>
 </header>
 <main>
   <!-- ============ CẤU HÌNH (anh Khang điền sau khi deploy Apps Script) ============ -->
@@ -183,6 +183,9 @@
     TL:'Tân Long(TL)', TN:'Tân Nghĩa(TN)', TQT:'Trần Quốc Toản(TQT)', TXmat:'Trường Xuân-mặt(TX)',
     TXgieng:'Trường Xuân-giếng(TX)', SXD:'SXD(CD)', PhuongTra:'Phuong Tra(CD)'
   };
+  // Khung CHOT tinh san luong ngay: 16h; rieng CD (SXD, Phuong Tra) chot 8h (Khang 23/10/2026).
+  const KHUNG_CHOT = { SXD:'8h', PhuongTra:'8h' };
+  const chotOf = code => KHUNG_CHOT[code] || '16h';
   const GIENG = { SXD:1, PhuongTra:1, TXgieng:1 };        // nuoc ngam: LL1 = LL2, khong tinh that thoat
   const DB_DW = { DB:1, DW:1 };                            // thoat thoat rieng DB/DW vo nghia (nuoc chuyen)
   const NHOM_TEN = { tho:'Nước thô (m³)', sach:'Nước sạch (m³)', ozone:'Nước ozone — trừ khỏi nước thô (m³)', dien:'Điện (kWh)' };
@@ -307,9 +310,9 @@
 
   // ---------------- lan ghi truoc + trung vi ----------------
   function baseRow() {
-    // Moc so sanh = lan ghi 16h GAN NHAT truoc ngay dang ghi (ngay D-1 la chuan).
-    const d = dInp.value;
-    const cand = recent.filter(r => r.khung === '16h' && r.ngay < d)
+    // Moc so sanh = lan ghi KHUNG CHOT (16h; CD 8h) GAN NHAT truoc ngay dang ghi (ngay D-1 la chuan).
+    const d = dInp.value, kc = chotOf(plantSel.value);
+    const cand = recent.filter(r => r.khung === kc && r.ngay < d)
                        .sort((a, b) => (a.ngay + a.row_id).localeCompare(b.ngay + b.row_id));
     return cand.length ? cand[cand.length - 1] : null;
   }
@@ -333,7 +336,7 @@
   }
   function typical(code) {
     // trung vi san luong NGAY (16h->16h ngay lien tiep) cua 7 ngay gan nhat truoc ngay dang ghi
-    const rows = recent.filter(r => r.khung === '16h' && r.ngay < dInp.value)
+    const rows = recent.filter(r => r.khung === chotOf(code) && r.ngay < dInp.value)
                        .sort((a, b) => (a.ngay + a.row_id).localeCompare(b.ngay + b.row_id));
     const byDay = {}; rows.forEach(r => { byDay[r.ngay] = r; });
     const days = Object.keys(byDay).sort();
@@ -379,7 +382,7 @@
     for (const it of inputs) {
       const pv = base ? base.values[it.m.id] : null;
       it.prevEl.textContent = Number.isFinite(pv)
-        ? `Lần trước: ${fmt(pv)} (16h ${vnDate(base.ngay)})` : (recentPlant === code ? 'Chưa có lần ghi 16h trước đó' : '');
+        ? `Lần trước: ${fmt(pv)} (${base.khung} ${vnDate(base.ngay)})` : (recentPlant === code ? `Chưa có lần ghi ${chotOf(code)} trước đó` : '');
       const d = meterDelta(vals[it.m.id], pv, resets[it.m.id]);
       if (d === null) { it.deltaEl.textContent = ''; continue; }
       const tm = typ && typ.meter[it.m.id];
@@ -395,8 +398,9 @@
     if (!base) { summary.style.display = 'none'; return warns; }
     const t = totals(code, vals, base.values, resets);
     const gap = Math.round((Date.parse(dInp.value) - Date.parse(base.ngay)) / 86400000);
-    const khungTxt = khung() === '8h' ? `16h ${vnDate(base.ngay)} → 8h ${vnDate(dInp.value)} (chưa trọn ngày)`
-                                      : `16h ${vnDate(base.ngay)} → 16h ${vnDate(dInp.value)}` + (gap > 1 ? ` — GỘP ${gap} NGÀY` : '');
+    const kc = chotOf(code);
+    const khungTxt = khung() !== kc ? `${kc} ${vnDate(base.ngay)} → ${khung()} ${vnDate(dInp.value)} (chưa trọn ngày)`
+                                    : `${kc} ${vnDate(base.ngay)} → ${kc} ${vnDate(dInp.value)}` + (gap > 1 ? ` — GỘP ${gap} NGÀY` : '');
     let html = `<b>Sản lượng tạm tính</b> <span class="hint">${khungTxt}</span><br>`;
     if (t.thieu.length) html += `<span class="hint">Còn thiếu: ${t.thieu.join(', ')}</span><br>`;
     else {
@@ -405,7 +409,7 @@
       html += `Điện: <b>${fmt(t.dien)}</b> kWh` + (t.sach > 0 ? ` · ${fmt(t.dien / t.sach, 2)} kWh/m³` : '') + '<br>';
       if (!GIENG[code] && !DB_DW[code] && t.tho > 0) html += `Thất thoát: <b>${fmt((t.tho - t.sach) / t.tho * 100, 1)}%</b><br>`;
       if (DB_DW[code]) html += '<span class="hint">Đông Bình: thất thoát xem theo Đông Bình tổng (DB + DW).</span><br>';
-      if (khung() === '16h' && gap === 1 && typ) {
+      if (khung() === kc && gap === 1 && typ) {
         for (const [k, ten] of [['tho', 'Nước thô'], ['sach', 'Nước sạch'], ['dien', 'Điện']]) {
           if (GIENG[code] && k === 'tho') continue;
           const tv = typ[k];
@@ -434,8 +438,14 @@
   }
 
   // ---------------- su kien ----------------
+  function capNhatHint() {
+    const kc = chotOf(plantSel.value);
+    $('khungHint').textContent = `Khung ${kc} là số CHỐT tính sản lượng ngày (${kc} hôm trước → ${kc} hôm nay)` +
+      (kc === '8h' ? ' — CD chốt lúc 8h.' : '.');
+  }
   plantSel.addEventListener('change', () => {
     const c = plantSel.value;
+    capNhatHint();
     localStorage.setItem('cs_plant', c);
     populateBy(c); buildMeters(c); historyBox.style.display = 'none';
     loadRecent(c);
@@ -468,7 +478,8 @@
       if (!GIENG[code]) parts.push(`thô ${fmt(t.tho)} m³`);
       parts.push(`sạch ${fmt(t.sach)} m³`, `điện ${fmt(t.dien)} kWh`);
       if (!GIENG[code] && !DB_DW[code] && t.tho > 0) parts.push(`thất thoát ${fmt((t.tho - t.sach) / t.tho * 100, 1)}%`);
-      lines.push(`  ➜ ${k === '8h' ? 'Từ 16h hôm trước đến 8h' : 'Ngày (16h→16h)'}: ` + parts.join(' · '));
+      const kc = chotOf(code);
+      lines.push(`  ➜ ${k !== kc ? `Từ ${kc} hôm trước đến ${k}` : `Ngày (${kc}→${kc})`}: ` + parts.join(' · '));
     }
     if (note) lines.push(`  📝 ${note}`);
     lines.push(`  — ${by}`);
@@ -551,9 +562,9 @@
   // ---------------- khoi dong ----------------
   dInp.value = todayIso();
   setKhung(new Date().getHours() < 12 ? '8h' : '16h');
-  $('khungHint').textContent = 'Khung 16h là số CHỐT tính sản lượng ngày (16h hôm trước → 16h hôm nay).';
+  capNhatHint();
   const lastPlant = localStorage.getItem('cs_plant') || '';
-  if (METERS[lastPlant]) { plantSel.value = lastPlant; populateBy(lastPlant); buildMeters(lastPlant); loadRecent(lastPlant); }
+  if (METERS[lastPlant]) { plantSel.value = lastPlant; capNhatHint(); populateBy(lastPlant); buildMeters(lastPlant); loadRecent(lastPlant); }
 </script>
 </body>
 </html>
