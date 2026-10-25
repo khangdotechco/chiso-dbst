@@ -206,6 +206,10 @@
   const PLANT_ORDER = ['DB','DW','HCL','MA','MH','TL','TN','TQT','TXmat','TXgieng','SXD','PhuongTra'];
   // Canh bao "bat thuong": san luong ngay lech khoi trung vi 7 ngay qua nguong nay -> hoi lai.
   const LECH_CAO = 1.8, LECH_THAP = 0.4;
+  // 25/10: CHAN HAN (khong cho gui) khi 1 dong ho tang > CHAN_GAP lan binh thuong hoac AM ma khong tick thay/reset
+  // (TL 24/10 go cong to dien 327600 thay 23493 -> dien 30 trieu kWh)
+  const CHAN_GAP = 4;
+  let chan = [];
 
   const $ = id => document.getElementById(id);
   const plantSel = $('plant'), dInp = $('d'), metersBox = $('meters'), summary = $('summary');
@@ -378,7 +382,7 @@
     const base = recentPlant === code ? baseRow() : null;
     const typ = recentPlant === code ? typical(code) : null;
     const { vals, resets } = readForm();
-    const warns = [];
+    const warns = []; chan = [];
     for (const it of inputs) {
       const pv = base ? base.values[it.m.id] : null;
       it.prevEl.textContent = Number.isFinite(pv)
@@ -393,6 +397,9 @@
       const donvi = it.m.nhom === 'dien' ? 'kWh' : 'm³';
       it.deltaEl.className = 'delta ' + (bad ? 'bad' : 'ok');
       it.deltaEl.textContent = `+${fmt(d)}` + (it.m.hs !== 1 ? ` × ${it.m.hs} = ${fmt(d * it.m.hs)} ${donvi}` : ` ${donvi}`) + why;
+      if (d < 0) chan.push(`${it.m.ten}: chỉ số NHỎ HƠN lần trước (${fmt(vals[it.m.id])} < ${fmt(pv)}). Nếu đã thay/reset đồng hồ thì tick ô "Đã thay / reset".`);
+      else if (tm && tm > 0 && d > tm * CHAN_GAP)
+        chan.push(`${it.m.ten}: tăng ${fmt(d)}, gấp ${fmt(d / tm, 0)} lần bình thường (~${fmt(tm)}). Đọc lại đồng hồ, kiểm tra có gõ nhầm số của đồng hồ khác không.`);
       if (bad) warns.push(`${it.m.ten}: ${fmt(d)}${why}`);
     }
     if (!base) { summary.style.display = 'none'; return warns; }
@@ -504,6 +511,11 @@
     const by = bySelect.value === '__other__' ? byOther.value.trim() : bySelect.value;
     if (!by) { show('❌ Vui lòng chọn/nhập tên người ghi.', 'err'); return; }
     const warns = recalc() || [];
+    if (chan.length) {
+      show('⛔ KHÔNG GỬI ĐƯỢC — chỉ số sai rõ ràng:\n' + chan.join('\n') +
+           '\nSửa lại rồi bấm Gửi. Nếu chắc chắn số đúng, báo kỹ thuật viên.', 'err');
+      return;
+    }
     if (warns.length && !confirm('⚠️ Kiểm tra lại:\n' + warns.join('\n') + '\n\nVẫn GỬI?')) return;
     const dup = recent.find(r => r.ngay === dInp.value && r.khung === k);
     if (dup && !confirm(`Đã có chỉ số ${k} ngày ${vnDate(dInp.value)} (${dup.by || ''}).\nGửi lại sẽ THAY bản cũ. Tiếp tục?`)) return;
