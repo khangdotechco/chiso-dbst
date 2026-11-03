@@ -188,7 +188,7 @@
   const chotOf = code => KHUNG_CHOT[code] || '16h';
   const GIENG = { SXD:1, PhuongTra:1, TXgieng:1 };        // nuoc ngam: LL1 = LL2, khong tinh that thoat
   const DB_DW = { DB:1, DW:1 };                            // thoat thoat rieng DB/DW vo nghia (nuoc chuyen)
-  const NHOM_TEN = { tho:'Nước thô (m³)', sach:'Nước sạch (m³)', ozone:'Nước ozone — trừ khỏi nước thô (m³)', dien:'Điện (kWh)' };
+  const NHOM_TEN = { tho:'Nước thô (m³)', sach:'Nước sạch (m³)', ozone:'Nước ozone (chỉ theo dõi — từ 28/10 không trừ khỏi nước thô)', dien:'Điện (kWh)' };
   // Danh sach nhan vien (giong PWA do duc) — co muc "Khac…" nhap tay.
   const STAFF_TL = ["Nguyễn Lê Sĩ", "Phạm Hồng Lĩnh", "Đặng Công Khanh"];
   const STAFF_TX = ["Nguyễn Thanh Vũ", "Võ Hồng Sơn"];
@@ -326,14 +326,17 @@
     if (reset && Number.isFinite(reset.cu) && Number.isFinite(reset.moi)) return (reset.cu - prev) + (cur - reset.moi);
     return cur - prev;
   }
-  function totals(code, vals, prevVals, resets) {
+  // TX mat: tu 28/10/2026 dong ho tho doi ra xa, ozone cham SAU dong ho -> KHONG tru ozone (Khang 03/11)
+  const OZONE_KHONG_TRU_TU = { TXmat: '2026-10-28' };
+  function totals(code, vals, prevVals, resets, ngay) {
+    const boOz = OZONE_KHONG_TRU_TU[code] && (ngay || dInp.value) >= OZONE_KHONG_TRU_TU[code];
     // -> {tho, sach, dien, thieu:[ten]} (da nhan he so; ozone tru khoi tho)
     const t = { tho: 0, sach: 0, dien: 0, thieu: [] };
     for (const m of METERS[code] || []) {
       const d = meterDelta(vals[m.id], prevVals ? prevVals[m.id] : null, resets ? resets[m.id] : null);
       if (d === null) { t.thieu.push(m.ten); continue; }
       const v = d * m.hs * (m.dau || 1);
-      if (m.nhom === 'ozone') t.tho -= v; else t[m.nhom] += v;
+      if (m.nhom === 'ozone') { if (!boOz) t.tho -= v; } else t[m.nhom] += v;
     }
     if (GIENG[code]) t.tho = t.sach;
     return t;
@@ -348,7 +351,7 @@
     for (let i = 1; i < days.length; i++) {
       if (isoAdd(days[i - 1], 1) !== days[i]) continue;
       const a = byDay[days[i - 1]], b = byDay[days[i]];
-      const t = totals(code, b.values, a.values, b.resets);
+      const t = totals(code, b.values, a.values, b.resets, b.ngay);
       if (!t.thieu.length) { out.tho.push(t.tho); out.sach.push(t.sach); out.dien.push(t.dien); }
       for (const m of METERS[code] || []) {
         const d = meterDelta(b.values[m.id], a.values[m.id], (b.resets || {})[m.id]);
