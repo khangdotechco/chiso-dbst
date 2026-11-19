@@ -209,6 +209,8 @@
   // 25/10: CHAN HAN (khong cho gui) khi 1 dong ho tang > CHAN_GAP lan binh thuong hoac AM ma khong tick thay/reset
   // (TL 24/10 go cong to dien 327600 thay 23493 -> dien 30 trieu kWh)
   const CHAN_GAP = 4;
+  // v1.95 (Khang 19/11): GIU o 'Da thay / reset' (co the sap thay dong ho). Doi = false de an.
+  const CHO_PHEP_THAY_DONG_HO = true;
   let chan = [];
 
   const $ = id => document.getElementById(id);
@@ -304,7 +306,7 @@
         chk.addEventListener('change', () => { rb.style.display = chk.checked ? 'block' : 'none'; recalc(); });
         [el, oldEl, newEl].forEach(x => x.addEventListener('input', recalc));
         box.appendChild(el); box.appendChild(prevEl); box.appendChild(deltaEl);
-        box.appendChild(chkL); box.appendChild(rb);
+        if (CHO_PHEP_THAY_DONG_HO) { box.appendChild(chkL); box.appendChild(rb); }
         g.appendChild(box);
         inputs.push({ m, el, chk, oldEl, newEl, prevEl, deltaEl });
       }
@@ -327,7 +329,7 @@
     return cur - prev;
   }
   // TX mat: tu 28/10/2026 dong ho tho doi ra xa, ozone cham SAU dong ho -> KHONG tru ozone (Khang 03/11)
-  const OZONE_KHONG_TRU_TU = { TXmat: '2026-10-28' };
+  const OZONE_KHONG_TRU_TU = { TXmat: '2026-10-27' };
   function totals(code, vals, prevVals, resets, ngay) {
     const boOz = OZONE_KHONG_TRU_TU[code] && (ngay || dInp.value) >= OZONE_KHONG_TRU_TU[code];
     // -> {tho, sach, dien, thieu:[ten]} (da nhan he so; ozone tru khoi tho)
@@ -374,7 +376,11 @@
       if (it.chk.checked) {
         const cu = parseCS(it.oldEl.value), moi = parseCS(it.newEl.value);
         resets[it.m.id] = { cu, moi };
-        if (!Number.isFinite(cu) || !Number.isFinite(moi)) errs.push(`${it.m.ten}: thiếu chỉ số đồng hồ cũ/mới`);
+        if (!Number.isFinite(cu) || !Number.isFinite(moi))
+          errs.push(`${it.m.ten}: đã tick "Đã thay / reset" nhưng chưa nhập ` +
+                    (!Number.isFinite(cu) && !Number.isFinite(moi) ? 'chỉ số cuối đồng hồ cũ và chỉ số đầu đồng hồ mới'
+                     : !Number.isFinite(cu) ? 'chỉ số CUỐI của đồng hồ cũ' : 'chỉ số ĐẦU của đồng hồ mới') +
+                    '. Nếu KHÔNG thay đồng hồ thì BỎ TICK ô này.');
       }
     }
     return { vals, resets, errs };
@@ -386,23 +392,31 @@
     const typ = recentPlant === code ? typical(code) : null;
     const { vals, resets } = readForm();
     const warns = []; chan = [];
+    // v1.93 (19/11): 'binh thuong' la san luong 1 NGAY -> gop N ngay (thieu lan ghi) thi nhan N,
+    // truoc day so 2 ngay voi muc 1 ngay -> moi dong ho bao 'khac thuong', gop >= 4 ngay bi CHAN het.
+    const kc0 = chotOf(code);
+    const soNgay = (base && khung() === kc0)
+      ? Math.max(1, Math.round((Date.parse(dInp.value) - Date.parse(base.ngay)) / 86400000)) : 1;
     for (const it of inputs) {
       const pv = base ? base.values[it.m.id] : null;
       it.prevEl.textContent = Number.isFinite(pv)
         ? `Lần trước: ${fmt(pv)} (${base.khung} ${vnDate(base.ngay)})` : (recentPlant === code ? `Chưa có lần ghi ${chotOf(code)} trước đó` : '');
       const d = meterDelta(vals[it.m.id], pv, resets[it.m.id]);
       if (d === null) { it.deltaEl.textContent = ''; continue; }
-      const tm = typ && typ.meter[it.m.id];
-      let bad = d < 0, why = d < 0 ? ' ⚠ ÂM — đồng hồ lùi? kiểm tra lại hoặc tick "thay/reset"' : '';
+      const tm = typ && typ.meter[it.m.id] ? typ.meter[it.m.id] * soNgay : null;
+      const tmTxt = tm ? `~${fmt(tm)}` + (soNgay > 1 ? ` cho ${soNgay} ngày` : '') : '';
+      let bad = d < 0, why = d < 0 ? (' ⚠ ÂM — đồng hồ lùi? đọc lại số' + (CHO_PHEP_THAY_DONG_HO ? ' hoặc tick "thay/reset"' : '')) : '';
       if (!bad && tm && tm > 0 && (d > tm * LECH_CAO || d < tm * LECH_THAP)) {
-        bad = true; why = ` ⚠ khác thường (thường ~${fmt(tm)})`;
+        bad = true; why = ` ⚠ khác thường (thường ${tmTxt})`;
       }
       const donvi = it.m.nhom === 'dien' ? 'kWh' : 'm³';
       it.deltaEl.className = 'delta ' + (bad ? 'bad' : 'ok');
       it.deltaEl.textContent = `+${fmt(d)}` + (it.m.hs !== 1 ? ` × ${it.m.hs} = ${fmt(d * it.m.hs)} ${donvi}` : ` ${donvi}`) + why;
-      if (d < 0) chan.push(`${it.m.ten}: chỉ số NHỎ HƠN lần trước (${fmt(vals[it.m.id])} < ${fmt(pv)}). Nếu đã thay/reset đồng hồ thì tick ô "Đã thay / reset".`);
+      if (d < 0) chan.push(`${it.m.ten}: chỉ số NHỎ HƠN lần trước (${fmt(vals[it.m.id])} < ${fmt(pv)}). Đọc lại đồng hồ, kiểm tra có gõ thiếu/thừa chữ số không.` +
+                           (CHO_PHEP_THAY_DONG_HO ? ' Nếu đã thay/reset đồng hồ thì tick ô "Đã thay / reset".' : ' Nếu chắc chắn đúng, báo kỹ thuật viên.'));
       else if (tm && tm > 0 && d > tm * CHAN_GAP)
-        chan.push(`${it.m.ten}: tăng ${fmt(d)}, gấp ${fmt(d / tm, 0)} lần bình thường (~${fmt(tm)}). Đọc lại đồng hồ, kiểm tra có gõ nhầm số của đồng hồ khác không.`);
+        chan.push(`${it.m.ten}: tăng ${fmt(d)}, gấp ${fmt(d / tm, 0)} lần bình thường (${tmTxt}). Đọc lại đồng hồ, kiểm tra có gõ nhầm số của đồng hồ khác hoặc gõ thiếu/thừa chữ số không.` +
+                  (CHO_PHEP_THAY_DONG_HO ? ' Nếu đồng hồ đã được THAY thì tick "Đã thay / reset" và nhập đủ chỉ số cuối đồng hồ cũ + chỉ số đầu đồng hồ mới.' : ''));
       if (bad) warns.push(`${it.m.ten}: ${fmt(d)}${why}`);
     }
     if (!base) { summary.style.display = 'none'; return warns; }
